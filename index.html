@@ -36,7 +36,6 @@
             const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            
             if (hashHex === 'cdb45c882621c016439f48966fb175f30a7240380e3f1c441f82ec91d92500a7') {
                 document.getElementById('login-overlay').style.display = 'none';
                 document.getElementById('map').style.display = 'block';
@@ -50,25 +49,21 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(map);
-
             markersData.forEach(function(m) {
                 var color = 'blue';
                 var eta = parseFloat(m.eta);
                 if (eta < 3) color = 'green';
                 else if (eta < 5) color = 'orange';
                 else color = 'red';
-
                 var circle = L.circleMarker([m.lat, m.lon], {
                     color: color, fillColor: color, fillOpacity: 0.5, radius: 8
                 }).addTo(map);
-
                 circle.bindPopup("<b>" + m.name + "</b><br>" +
                                  "District: " + m.district + "<br>" +
                                  "Designation: " + m.designation + "<br>" +
                                  "Vacancies: " + m.vacancies + "<br>" +
                                  "ETA from Homagama: " + m.eta + " hrs");
             });
-
             var legend = L.control({position: 'bottomright'});
             legend.onAdd = function (map) {
                 var div = L.DomUtil.create('div', 'info legend');
