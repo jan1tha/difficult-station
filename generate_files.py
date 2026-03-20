@@ -675,10 +675,16 @@ def create_files():
         .reset-btn { width: 100%%; margin-top: 8px; padding: 6px; font-size: 12px;
             background: #f0f2f5; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; }
         .reset-btn:hover { background: #e0e2e5; }
-        .info.legend { line-height: 22px; font-size: 12px; padding: 8px 12px;
-            background: white; border-radius: 6px; box-shadow: 0 1px 6px rgba(0,0,0,0.2); }
+        .info.legend { font-size: 12px; background: white; border-radius: 6px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.2); overflow: hidden; min-width: 160px; }
+        .legend-header { padding: 6px 10px; background: #1877f2; color: white;
+            cursor: pointer; font-weight: bold; font-size: 12px;
+            display: flex; justify-content: space-between; align-items: center; }
+        .legend-body { padding: 8px 12px; line-height: 22px; }
+        .legend-body.collapsed { display: none; }
         .legend i { width: 12px; height: 12px; display: inline-block;
             margin-right: 5px; border-radius: 50%%; vertical-align: middle; }
+        @media (max-width: 600px) { .legend-body { display: none; } }
     </style>
 </head>
 <body>
@@ -716,14 +722,14 @@ def create_files():
             <div class="filter-section">
                 <div class="filter-section-header">
                     <label class="section-label">Designation</label>
-                    <span class="clear-link" onclick="clearCheckboxes('desig-list')">clear</span>
+                    <span class="clear-link" onclick="toggleCheckboxes('desig-list', this)">clear</span>
                 </div>
                 <div id="desig-list" class="checkbox-list"></div>
             </div>
             <div class="filter-section">
                 <div class="filter-section-header">
                     <label class="section-label">District</label>
-                    <span class="clear-link" onclick="clearCheckboxes('district-list')">clear</span>
+                    <span class="clear-link" onclick="toggleCheckboxes('district-list', this)">clear</span>
                 </div>
                 <div id="district-list" class="checkbox-list"></div>
             </div>
@@ -843,6 +849,9 @@ def create_files():
         legend.onAdd = function() {
             var div = L.DomUtil.create('div', 'info legend');
             div.innerHTML =
+                '<div class="legend-header" onclick="this.nextSibling.classList.toggle(\'collapsed\')">' +
+                '\u25BC Legend <span style="font-size:10px;font-weight:normal;">(tap to toggle)</span></div>' +
+                '<div class="legend-body">' +
                 '<b>ETA from Homagama</b><br>' +
                 '<i style="background:#27ae60"></i> &lt; 3 hrs<br>' +
                 '<i style="background:#e67e22"></i> 3 &ndash; 5 hrs<br>' +
@@ -852,7 +861,9 @@ def create_files():
                 '<span style="display:inline-block;width:12px;height:12px;border-radius:50%%;border:2px solid #888;opacity:0.8;margin-right:5px;vertical-align:middle;"></span>Standard (hollow)<br>' +
                 '<hr style="margin:6px 0"><b>Facility</b><br>' +
                 '<span style="display:inline-block;width:12px;height:12px;border-radius:50%%;background:#888;margin-right:5px;vertical-align:middle;"></span>DH (r=9)<br>' +
-                '<span style="display:inline-block;width:10px;height:10px;border-radius:50%%;border:2px dashed #888;margin-right:5px;vertical-align:middle;"></span>Non-DH (dashed r=7)';
+                '<span style="display:inline-block;width:10px;height:10px;border-radius:50%%;border:2px dashed #888;margin-right:5px;vertical-align:middle;"></span>Non-DH (dashed r=7)' +
+                '</div>';
+            L.DomEvent.disableClickPropagation(div);
             return div;
         };
         legend.addTo(map);
@@ -881,14 +892,18 @@ def create_files():
         });
         updateCount();
     }
-    function clearCheckboxes(listId) {
-        document.querySelectorAll('#' + listId + ' input').forEach(function(cb) { cb.checked = false; });
+    function toggleCheckboxes(listId, btn) {
+        var boxes = [...document.querySelectorAll('#' + listId + ' input')];
+        var allChecked = boxes.every(function(cb) { return cb.checked; });
+        boxes.forEach(function(cb) { cb.checked = !allChecked; });
+        btn.textContent = allChecked ? 'select all' : 'clear';
         applyFilters();
     }
     function resetFilters() {
         document.querySelector('input[name=stype][value=all]').checked = true;
         document.querySelector('input[name=ftype][value=all]').checked = true;
         document.querySelectorAll('#desig-list input, #district-list input').forEach(function(cb) { cb.checked = true; });
+        document.querySelectorAll('.clear-link').forEach(function(btn) { btn.textContent = 'clear'; });
         document.getElementById('eta-min').value = etaRangeMin;
         document.getElementById('eta-max').value = etaRangeMax;
         applyFilters();
