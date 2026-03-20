@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Difficult Stations Sri Lanka - Secure</title>
+    <title>Difficult Stations Sri Lanka</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -31,9 +31,13 @@
     </div>
     <div id="map"></div>
     <script>
-        function checkPassword() {
-            var pass = document.getElementById('password-input').value;
-            if (pass === 'redda2026') {
+        async function checkPassword() {
+            const password = document.getElementById('password-input').value;
+            const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            if (hashHex === 'cdb45c882621c016439f48966fb175f30a7240380e3f1c441f82ec91d92500a7') {
                 document.getElementById('login-overlay').style.display = 'none';
                 document.getElementById('map').style.display = 'block';
                 initMap();
