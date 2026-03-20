@@ -667,6 +667,9 @@ def create_files():
             border-radius: 5px; padding: 4px 6px; background: #fafafa; }
         .checkbox-list label { display: flex; align-items: center; gap: 6px;
             font-size: 12px; cursor: pointer; padding: 2px 0; white-space: nowrap; }
+        .eta-range { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+        .eta-range input[type=number] { width: 50px; padding: 3px 5px;
+            border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
         #filter-count { font-size: 12px; color: #555; text-align: center;
             padding: 6px 0 2px; border-top: 1px solid #eee; margin-top: 8px; }
         .reset-btn { width: 100%%; margin-top: 8px; padding: 6px; font-size: 12px;
@@ -724,6 +727,16 @@ def create_files():
                 </div>
                 <div id="district-list" class="checkbox-list"></div>
             </div>
+            <div class="filter-section">
+                <label class="section-label">ETA from Homagama (hrs)</label>
+                <div class="eta-range">
+                    <span>Min</span>
+                    <input type="number" id="eta-min" min="0" max="99" step="0.5" value="0" oninput="applyFilters()">
+                    <span>Max</span>
+                    <input type="number" id="eta-max" min="0" max="99" step="0.5" value="99" oninput="applyFilters()">
+                    <span>hrs</span>
+                </div>
+            </div>
             <div id="filter-count"></div>
             <button class="reset-btn" onclick="resetFilters()">Reset Filters</button>
         </div>
@@ -756,6 +769,7 @@ def create_files():
     }
     var allMarkerLayers = [];
     var map;
+    var etaRangeMin = 0, etaRangeMax = 99;
     function etaColor(eta) {
         if (eta < 3) return '#27ae60';
         if (eta < 5) return '#e67e22';
@@ -772,7 +786,7 @@ def create_files():
         desigs.forEach(function(d) {
             var lbl = document.createElement('label');
             var cb = document.createElement('input');
-            cb.type = 'checkbox'; cb.value = d;
+            cb.type = 'checkbox'; cb.value = d; cb.checked = true;
             cb.addEventListener('change', applyFilters);
             lbl.appendChild(cb);
             lbl.appendChild(document.createTextNode(' ' + d));
@@ -783,12 +797,19 @@ def create_files():
         districts.forEach(function(d) {
             var lbl = document.createElement('label');
             var cb = document.createElement('input');
-            cb.type = 'checkbox'; cb.value = d;
+            cb.type = 'checkbox'; cb.value = d; cb.checked = true;
             cb.addEventListener('change', applyFilters);
             lbl.appendChild(cb);
             lbl.appendChild(document.createTextNode(' ' + d));
             distlist.appendChild(lbl);
         });
+        var etas = markersData.map(m => parseFloat(m.eta));
+        etaRangeMin = Math.floor(Math.min(...etas) * 2) / 2;
+        etaRangeMax = Math.ceil(Math.max(...etas) * 2) / 2;
+        var etaMinEl = document.getElementById('eta-min');
+        var etaMaxEl = document.getElementById('eta-max');
+        etaMinEl.min = etaRangeMin; etaMinEl.max = etaRangeMax; etaMinEl.value = etaRangeMin;
+        etaMaxEl.min = etaRangeMin; etaMaxEl.max = etaRangeMax; etaMaxEl.value = etaRangeMax;
 
         markersData.forEach(function(m) {
             var color = etaColor(parseFloat(m.eta));
@@ -842,6 +863,8 @@ def create_files():
         var ftype = document.querySelector('input[name=ftype]:checked').value;
         var checkedDesigs = [...document.querySelectorAll('#desig-list input:checked')].map(cb => cb.value);
         var checkedDistricts = [...document.querySelectorAll('#district-list input:checked')].map(cb => cb.value);
+        var etaMin = parseFloat(document.getElementById('eta-min').value) || 0;
+        var etaMax = parseFloat(document.getElementById('eta-max').value) || 99;
         allMarkerLayers.forEach(function(ml) {
             var m = ml.data;
             var show = true;
@@ -851,6 +874,8 @@ def create_files():
             if (ftype === 'nondh' && m.is_dh) show = false;
             if (checkedDesigs.length && !checkedDesigs.includes(m.desig_group)) show = false;
             if (checkedDistricts.length && !checkedDistricts.includes(m.district)) show = false;
+            var eta = parseFloat(m.eta);
+            if (eta < etaMin || eta > etaMax) show = false;
             if (show) { if (!map.hasLayer(ml.layer)) ml.layer.addTo(map); }
             else { if (map.hasLayer(ml.layer)) map.removeLayer(ml.layer); }
         });
@@ -863,7 +888,9 @@ def create_files():
     function resetFilters() {
         document.querySelector('input[name=stype][value=all]').checked = true;
         document.querySelector('input[name=ftype][value=all]').checked = true;
-        document.querySelectorAll('#desig-list input, #district-list input').forEach(function(cb) { cb.checked = false; });
+        document.querySelectorAll('#desig-list input, #district-list input').forEach(function(cb) { cb.checked = true; });
+        document.getElementById('eta-min').value = etaRangeMin;
+        document.getElementById('eta-max').value = etaRangeMax;
         applyFilters();
     }
     function updateCount() {
