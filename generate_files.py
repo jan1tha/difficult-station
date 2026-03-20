@@ -140,27 +140,86 @@ coords = {
     "HOSPITAL": (7.4199, 81.8228), "ANALATIVU DH": (9.6667, 79.7667)
 }
 
+def normalize_designation(raw):
+    """Normalize messy OCR designation strings into clean groups."""
+    d = raw.strip().upper().replace('.', '').replace('[', '').replace('!', '').strip()
+    if d in ('AMOH', 'AMOH'): return 'AMOH'
+    if d == 'MOIC': return 'MOIC'
+    if 'RELIEF' in d: return 'MO Relief'
+    if 'MENTAL HEALTH' in d: return 'MO Mental Health'
+    if 'ANAESTHESIA' in d or 'ANESTHESIA' in d: return 'MO Anaesthesia / ICU'
+    if 'BLOOD BANK' in d: return 'MO Blood Bank'
+    if 'CARDIOLOGY' in d: return 'MO Cardiology'
+    if 'DIALYSIS' in d: return 'MO Dialysis'
+    if d == 'MO ENT' or d == 'ENT' in d and 'MO' in d: return 'MO ENT'
+    if 'ENT' in d: return 'MO ENT'
+    if 'EYE' in d or 'VITREO' in d or 'OPHTHAL' in d: return 'MO Eye'
+    if 'GYN' in d or 'OBS' in d: return 'SHO GYN & OBS' if d.startswith('SHO') else 'MO GYN & OBS'
+    if 'PICU' in d or 'NICU' in d or 'MICU' in d or 'SICU' in d: return 'MO ICU'
+    if 'ICU' in d and 'NEURO' not in d: return 'MO Anaesthesia / ICU'
+    if 'NEURO SURGERY' in d or 'NEUROLOGY' in d: return 'MO Neurology / Neurosurgery'
+    if 'PBU' in d or 'SCBU' in d: return 'MO PBU / SCBU'
+    if 'PAEDIATRIC SURGERY' in d: return 'MO Surgery'
+    if 'PAEDIATRIC' in d or 'PAEDIATRICS' in d: return 'SHO Paediatrics' if d.startswith('SHO') else 'MO Paediatrics'
+    if 'PATHOLOGY' in d or 'CHEMICAL PATH' in d or 'MICROBIOLOGY' in d or 'HAEMATOLOGY' in d: return 'MO Pathology / Lab'
+    if 'PSYCHIATRY' in d: return 'MO Psychiatry'
+    if 'RADIOLOGY' in d: return 'MO Radiology'
+    if 'REHABILITATION' in d: return 'MO Rehabilitation'
+    if 'ONCOL' in d or 'ONCO' in d: return 'MO Oncology'
+    if 'ORTHO' in d: return 'MO Orthopaedic'
+    if 'VASCULAR' in d or 'TRANSPLANT' in d: return 'MO Vascular Surgery'
+    if 'PLASTIC' in d: return 'MO Surgery'
+    if 'UROLOGY' in d or 'GU SURGERY' in d or 'GENITO' in d: return 'MO Urology / GU'
+    if 'NEPHROLOGY' in d: return 'MO Nephrology'
+    if 'ENDOCRINOLOGY' in d: return 'MO Endocrinology'
+    if 'RHEUMATOLOGY' in d: return 'MO Rheumatology'
+    if 'GASTRO' in d: return 'MO Gastroenterology'
+    if 'RESPIRATORY' in d or 'PULMONOL' in d: return 'MO Respiratory'
+    if 'DERMATOLOGY' in d: return 'MO Dermatology'
+    if 'MEDICO LEGAL' in d: return 'MO Medico Legal'
+    if 'STD' in d: return 'MO STD'
+    if 'A&E' in d: return 'MO A&E'
+    if 'ETU' in d or 'OPD' in d: return 'MO OPD / ETU'
+    if 'SURGERY' in d and d.startswith('SHO'): return 'SHO Surgery'
+    if 'MEDICINE' in d and d.startswith('SHO'): return 'SHO Medicine'
+    if 'SURGERY' in d: return 'MO Surgery'
+    if 'MEDICINE' in d: return 'MO Medicine'
+    if 'SOE' in d: return 'MO (SOE)'
+    if d.startswith('SHO'): return 'SHO'
+    # General MO catch-all
+    return 'MO'
+
+def is_dh(institute):
+    """True if the institute name ends with DH (District Hospital)."""
+    name = institute.strip().upper().replace('|','').replace('[','').replace(']','').strip()
+    return name.endswith(' DH') or name.endswith('DH')
+
 def create_files():
+    # Load difficult station indices
+    difficult_indices = set()
+    with open('AVAILABLE_DIFFICULT_STATIONS.csv', 'r') as f:
+        for row in csv.DictReader(f):
+            difficult_indices.add(row['INDEX'])
+
+    # Build difficult stations list with ETA + coords
     stations = []
     with open('AVAILABLE_DIFFICULT_STATIONS.csv', 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
             inst = row['INSTITUTE'].strip().upper()
             clean_name = inst.replace('|', '').replace('_', '').replace('[', '').replace(']', '').strip()
-            
-            # Find ETA from eta_data
+
+            # Find ETA
             eta = None
             for e_name, e_dist, e_time in eta_data:
                 if e_name in clean_name or clean_name in e_name:
                     eta = e_time
                     break
-            
             if eta is None:
-                # Default fallback
                 if row['DISTRICT'] in ['JAFFNA', 'MULLAITIVU', 'KILINOCHCHI']: eta = 7.0
                 elif row['DISTRICT'] in ['AMPARA', 'KALMUNAI', 'BATTICALOA']: eta = 8.0
                 else: eta = 5.0
-            
+
             # Find Lat/Lon
             lat, lon = None, None
             if clean_name in coords: lat, lon = coords[clean_name]
@@ -168,7 +227,7 @@ def create_files():
                 for k, v in coords.items():
                     if k in clean_name or clean_name in k:
                         lat, lon = v; break
-            
+
             stations.append({
                 "INDEX": row['INDEX'],
                 "DISTRICT": row['DISTRICT'],
@@ -176,30 +235,58 @@ def create_files():
                 "DESIGNATION": row['DESIGNATION'],
                 "VACANCIES": row['VACANCIES'],
                 "ESTIMATED_TRAVEL_TIME_HOURS": eta,
+                "IS_DH": "YES" if is_dh(row['INSTITUTE']) else "NO",
+                "DESIG_GROUP": normalize_designation(row['DESIGNATION']),
                 "lat": lat,
                 "lon": lon
             })
 
-    # Sort by ETA
     stations.sort(key=lambda x: x['ESTIMATED_TRAVEL_TIME_HOURS'])
 
-    # Write CSV
+    # Write DIFFICULT_STATIONS_BY_ETA.csv
     with open('DIFFICULT_STATIONS_BY_ETA.csv', 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['INDEX', 'DISTRICT', 'INSTITUTE', 'DESIGNATION', 'VACANCIES', 'ESTIMATED_TRAVEL_TIME_HOURS'])
+        writer = csv.DictWriter(f, fieldnames=['INDEX', 'DISTRICT', 'INSTITUTE', 'DESIGNATION', 'VACANCIES', 'ESTIMATED_TRAVEL_TIME_HOURS', 'IS_DH', 'DESIG_GROUP'])
         writer.writeheader()
         for s in stations:
-            writer.writerow({k: v for k, v in s.items() if k in ['INDEX', 'DISTRICT', 'INSTITUTE', 'DESIGNATION', 'VACANCIES', 'ESTIMATED_TRAVEL_TIME_HOURS']})
+            writer.writerow({k: v for k, v in s.items() if k in ['INDEX', 'DISTRICT', 'INSTITUTE', 'DESIGNATION', 'VACANCIES', 'ESTIMATED_TRAVEL_TIME_HOURS', 'IS_DH', 'DESIG_GROUP']})
 
-    # Write markers.js
-    valid_markers = [{"name": s['INSTITUTE'], "district": s['DISTRICT'], "lat": s['lat'], "lon": s['lon'], "eta": s['ESTIMATED_TRAVEL_TIME_HOURS'], "vacancies": s['VACANCIES'], "designation": s['DESIGNATION']} for s in stations if s['lat']]
+    # Write NON_DIFFICULT_STATIONS.csv
+    with open('NON_DIFFICULT_STATIONS.csv', 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['INDEX', 'DISTRICT', 'INSTITUTE', 'DESIGNATION', 'VACANCIES', 'IS_DH', 'DESIG_GROUP'])
+        writer.writeheader()
+        with open('Source/Vacancy List.csv', 'r') as vf:
+            for row in csv.DictReader(vf):
+                if row['INDEX'] not in difficult_indices:
+                    writer.writerow({
+                        'INDEX': row['INDEX'],
+                        'DISTRICT': row['DISTRICT'],
+                        'INSTITUTE': row['INSTITUTE'],
+                        'DESIGNATION': row['DESIGNATION'],
+                        'VACANCIES': row['VACANCIES'],
+                        'IS_DH': "YES" if is_dh(row['INSTITUTE']) else "NO",
+                        'DESIG_GROUP': normalize_designation(row['DESIGNATION'])
+                    })
+
+    # Write markers.js — difficult stations only (have ETAs + coords)
+    valid_markers = [{
+        "name": s['INSTITUTE'],
+        "district": s['DISTRICT'],
+        "lat": s['lat'],
+        "lon": s['lon'],
+        "eta": s['ESTIMATED_TRAVEL_TIME_HOURS'],
+        "vacancies": s['VACANCIES'],
+        "designation": s['DESIGNATION'],
+        "desig_group": s['DESIG_GROUP'],
+        "is_difficult": True,
+        "is_dh": is_dh(s['INSTITUTE'])
+    } for s in stations if s['lat']]
     with open('markers.js', 'w') as f:
         f.write("var markersData = " + json.dumps(valid_markers) + ";")
 
     # Generate Hash for "redda2026"
     pwd_hash = hashlib.sha256("redda2026".encode()).hexdigest()
 
-    html_template = """
-<!DOCTYPE html>
+    html_template = """<!DOCTYPE html>
 <html>
 <head>
     <title>Difficult Stations Sri Lanka</title>
@@ -209,71 +296,219 @@ def create_files():
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="markers.js"></script>
     <style>
+        * { box-sizing: border-box; }
         body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
         #map { height: 100vh; width: 100%; display: none; }
-        .info { padding: 6px 8px; font: 14px/16px Arial, Helvetica, sans-serif; background: white; background: rgba(255,255,255,0.8); box-shadow: 0 0 15px rgba(0,0,0,0.2); border-radius: 5px; }
+
+        /* Login */
         #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f0f2f5; display: flex; justify-content: center; align-items: center; z-index: 10000; }
         .login-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; width: 300px; }
         .login-box h2 { margin-bottom: 20px; color: #1c1e21; }
-        .login-box input { width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #dddfe2; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        .login-box input { width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #dddfe2; border-radius: 6px; font-size: 16px; }
         .login-box button { width: 100%; padding: 12px; background: #1877f2; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
         #error-msg { color: #d93025; font-size: 14px; margin-top: 10px; display: none; }
+
+        /* Filter panel */
+        #filter-panel {
+            position: fixed; top: 10px; right: 10px; z-index: 1000;
+            background: white; border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+            width: 240px; display: none;
+        }
+        #filter-header {
+            padding: 10px 14px; font-weight: bold; font-size: 14px;
+            background: #1877f2; color: white; border-radius: 10px 10px 0 0;
+            cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        }
+        #filter-body { padding: 12px 14px; }
+        #filter-body.collapsed { display: none; }
+        .filter-section { margin-bottom: 12px; }
+        .filter-section label.section-label {
+            font-size: 11px; font-weight: bold; color: #666;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            display: block; margin-bottom: 6px;
+        }
+        .radio-group label, .checkbox-row label {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 13px; cursor: pointer; padding: 2px 0;
+        }
+        select#desig-filter {
+            width: 100%; padding: 6px 8px; font-size: 13px;
+            border: 1px solid #ddd; border-radius: 5px;
+        }
+        #filter-count {
+            font-size: 12px; color: #555; text-align: center;
+            padding: 6px 0 2px; border-top: 1px solid #eee; margin-top: 8px;
+        }
+        .reset-btn {
+            width: 100%; margin-top: 8px; padding: 6px;
+            font-size: 12px; background: #f0f2f5; border: 1px solid #ddd;
+            border-radius: 5px; cursor: pointer;
+        }
+        .reset-btn:hover { background: #e0e2e5; }
+
+        /* Legend */
+        .legend { line-height: 20px; font-size: 13px; padding: 8px 10px; }
+        .legend i { width: 12px; height: 12px; display: inline-block; margin-right: 5px; border-radius: 50%; vertical-align: middle; }
+        .legend .dh-icon { border-radius: 2px; }
     </style>
 </head>
 <body>
     <div id="login-overlay">
         <div class="login-box">
-            <h2>Access Required</h2>
-            <input type="password" id="password-input" placeholder="Enter password" onkeydown="if(event.key === 'Enter') checkPassword()">
+            <h2>Difficult Stations Map</h2>
+            <input type="password" id="password-input" placeholder="Enter password" onkeydown="if(event.key==='Enter') checkPassword()">
             <button onclick="checkPassword()">Unlock Map</button>
             <p id="error-msg">Incorrect password!</p>
         </div>
     </div>
+
+    <div id="filter-panel">
+        <div id="filter-header" onclick="toggleFilters()">
+            <span>&#9660; Filters</span>
+            <span id="filter-count-badge" style="font-size:11px; font-weight:normal;"></span>
+        </div>
+        <div id="filter-body">
+            <div class="filter-section">
+                <label class="section-label">Station Type</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="stype" value="all" checked onchange="applyFilters()"> All Difficult Stations</label>
+                    <label><input type="radio" name="stype" value="dh" onchange="applyFilters()"> DH only</label>
+                    <label><input type="radio" name="stype" value="nondh" onchange="applyFilters()"> Non-DH only</label>
+                </div>
+            </div>
+            <div class="filter-section">
+                <label class="section-label">Designation</label>
+                <select id="desig-filter" onchange="applyFilters()">
+                    <option value="">All Designations</option>
+                </select>
+            </div>
+            <div id="filter-count"></div>
+            <button class="reset-btn" onclick="resetFilters()">Reset Filters</button>
+        </div>
+    </div>
+
     <div id="map"></div>
+
     <script>
-        async function checkPassword() {
-            const password = document.getElementById('password-input').value;
-            const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            if (hashHex === '%PWD_HASH%') {
-                document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('map').style.display = 'block';
-                initMap();
-            } else {
-                document.getElementById('error-msg').style.display = 'block';
-            }
+    function toggleFilters() {
+        var body = document.getElementById('filter-body');
+        var hdr = document.getElementById('filter-header').querySelector('span');
+        if (body.classList.contains('collapsed')) {
+            body.classList.remove('collapsed');
+            hdr.textContent = '\\u25BC Filters';
+        } else {
+            body.classList.add('collapsed');
+            hdr.textContent = '\\u25B2 Filters';
         }
-        function initMap() {
-            var map = L.map('map').setView([7.8731, 80.7718], 7);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
-            markersData.forEach(function(m) {
-                var color = 'blue';
-                var eta = parseFloat(m.eta);
-                if (eta < 3) color = 'green';
-                else if (eta < 5) color = 'orange';
-                else color = 'red';
-                var circle = L.circleMarker([m.lat, m.lon], {
-                    color: color, fillColor: color, fillOpacity: 0.5, radius: 8
-                }).addTo(map);
-                circle.bindPopup("<b>" + m.name + "</b><br>" +
-                                 "District: " + m.district + "<br>" +
-                                 "Designation: " + m.designation + "<br>" +
-                                 "Vacancies: " + m.vacancies + "<br>" +
-                                 "ETA from Homagama: " + m.eta + " hrs");
+    }
+
+    async function checkPassword() {
+        const password = document.getElementById('password-input').value;
+        const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
+        const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
+        if (hashHex === '%PWD_HASH%') {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('map').style.display = 'block';
+            document.getElementById('filter-panel').style.display = 'block';
+            initMap();
+        } else {
+            document.getElementById('error-msg').style.display = 'block';
+        }
+    }
+
+    var allMarkerLayers = [];
+    var map;
+
+    function etaColor(eta) {
+        if (eta < 3) return '#27ae60';
+        if (eta < 5) return '#e67e22';
+        return '#e74c3c';
+    }
+
+    function initMap() {
+        map = L.map('map').setView([7.8731, 80.7718], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Populate designation filter
+        var desigs = [...new Set(markersData.map(m => m.desig_group))].sort();
+        var sel = document.getElementById('desig-filter');
+        desigs.forEach(function(d) {
+            var opt = document.createElement('option');
+            opt.value = d; opt.textContent = d;
+            sel.appendChild(opt);
+        });
+
+        // Build markers
+        markersData.forEach(function(m) {
+            var color = etaColor(parseFloat(m.eta));
+            var radius = m.is_dh ? 9 : 7;
+            var dashArray = m.is_dh ? null : '4 3';
+            var shape = L.circleMarker([m.lat, m.lon], {
+                color: color, fillColor: color, fillOpacity: 0.6,
+                radius: radius, weight: 2, dashArray: dashArray
             });
-            var legend = L.control({position: 'bottomright'});
-            legend.onAdd = function (map) {
-                var div = L.DomUtil.create('div', 'info legend');
-                div.innerHTML += '<i style="background: green; width: 10px; height: 10px; display: inline-block;"></i> &lt; 3 hrs<br>';
-                div.innerHTML += '<i style="background: orange; width: 10px; height: 10px; display: inline-block;"></i> 3 - 5 hrs<br>';
-                div.innerHTML += '<i style="background: red; width: 10px; height: 10px; display: inline-block;"></i> &gt; 5 hrs';
-                return div;
-            };
-            legend.addTo(map);
-        }
+            shape.bindPopup(
+                '<b>' + m.name + '</b>' +
+                (m.is_dh ? ' <span style="background:#2980b9;color:white;padding:1px 5px;border-radius:3px;font-size:11px;">DH</span>' : '') +
+                '<br>District: ' + m.district +
+                '<br>Designation: ' + m.designation +
+                ' <small style="color:#888;">(' + m.desig_group + ')</small>' +
+                '<br>Vacancies: ' + m.vacancies +
+                '<br>ETA from Homagama: <b>' + m.eta + ' hrs</b>'
+            );
+            allMarkerLayers.push({ layer: shape, data: m });
+            shape.addTo(map);
+        });
+
+        // Legend
+        var legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function() {
+            var div = L.DomUtil.create('div', 'info legend');
+            div.innerHTML =
+                '<b>ETA from Homagama</b><br>' +
+                '<i style="background:#27ae60"></i> &lt; 3 hrs<br>' +
+                '<i style="background:#e67e22"></i> 3 – 5 hrs<br>' +
+                '<i style="background:#e74c3c"></i> &gt; 5 hrs<br>' +
+                '<hr style="margin:6px 0">' +
+                '<i style="background:#aaa;border-radius:2px!important"></i> DH (filled)<br>' +
+                '<i style="background:transparent;border:2px dashed #aaa;border-radius:50%"></i> Non-DH';
+            return div;
+        };
+        legend.addTo(map);
+        updateCount();
+    }
+
+    function applyFilters() {
+        var stype = document.querySelector('input[name=stype]:checked').value;
+        var desig = document.getElementById('desig-filter').value;
+        allMarkerLayers.forEach(function(ml) {
+            var m = ml.data;
+            var show = true;
+            if (stype === 'dh' && !m.is_dh) show = false;
+            if (stype === 'nondh' && m.is_dh) show = false;
+            if (desig && m.desig_group !== desig) show = false;
+            if (show) { if (!map.hasLayer(ml.layer)) ml.layer.addTo(map); }
+            else { if (map.hasLayer(ml.layer)) map.removeLayer(ml.layer); }
+        });
+        updateCount();
+    }
+
+    function resetFilters() {
+        document.querySelector('input[name=stype][value=all]').checked = true;
+        document.getElementById('desig-filter').value = '';
+        applyFilters();
+    }
+
+    function updateCount() {
+        var visible = allMarkerLayers.filter(ml => map.hasLayer(ml.layer)).length;
+        var total = allMarkerLayers.length;
+        var txt = 'Showing ' + visible + ' of ' + total + ' stations';
+        document.getElementById('filter-count').textContent = txt;
+        document.getElementById('filter-count-badge').textContent = visible + '/' + total;
+    }
     </script>
 </body>
 </html>
