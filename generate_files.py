@@ -849,7 +849,7 @@ def create_files():
         legend.onAdd = function() {
             var div = L.DomUtil.create('div', 'info legend');
             div.innerHTML =
-                '<div class="legend-header" onclick="this.nextSibling.classList.toggle(\'collapsed\')">' +
+                '<div class="legend-header" onclick="this.nextSibling.classList.toggle(&apos;collapsed&apos;)">' +
                 '\u25BC Legend <span style="font-size:10px;font-weight:normal;">(tap to toggle)</span></div>' +
                 '<div class="legend-body">' +
                 '<b>ETA from Homagama</b><br>' +
