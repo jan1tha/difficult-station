@@ -34,8 +34,14 @@
             text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
         .radio-group label { display: flex; align-items: center; gap: 6px;
             font-size: 13px; cursor: pointer; padding: 2px 0; }
-        select.filter-select { width: 100%; padding: 6px 8px; font-size: 13px;
-            border: 1px solid #ddd; border-radius: 5px; }
+        .filter-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .filter-section-header .section-label { margin-bottom: 0; }
+        .clear-link { font-size: 11px; color: #1877f2; cursor: pointer; }
+        .clear-link:hover { text-decoration: underline; }
+        .checkbox-list { max-height: 120px; overflow-y: auto; border: 1px solid #ddd;
+            border-radius: 5px; padding: 4px 6px; background: #fafafa; }
+        .checkbox-list label { display: flex; align-items: center; gap: 6px;
+            font-size: 12px; cursor: pointer; padding: 2px 0; white-space: nowrap; }
         #filter-count { font-size: 12px; color: #555; text-align: center;
             padding: 6px 0 2px; border-top: 1px solid #eee; margin-top: 8px; }
         .reset-btn { width: 100%; margin-top: 8px; padding: 6px; font-size: 12px;
@@ -80,16 +86,18 @@
                 </div>
             </div>
             <div class="filter-section">
-                <label class="section-label">Designation</label>
-                <select id="desig-filter" class="filter-select" onchange="applyFilters()">
-                    <option value="">All Designations</option>
-                </select>
+                <div class="filter-section-header">
+                    <label class="section-label">Designation</label>
+                    <span class="clear-link" onclick="clearCheckboxes('desig-list')">clear</span>
+                </div>
+                <div id="desig-list" class="checkbox-list"></div>
             </div>
             <div class="filter-section">
-                <label class="section-label">District</label>
-                <select id="district-filter" class="filter-select" onchange="applyFilters()">
-                    <option value="">All Districts</option>
-                </select>
+                <div class="filter-section-header">
+                    <label class="section-label">District</label>
+                    <span class="clear-link" onclick="clearCheckboxes('district-list')">clear</span>
+                </div>
+                <div id="district-list" class="checkbox-list"></div>
             </div>
             <div id="filter-count"></div>
             <button class="reset-btn" onclick="resetFilters()">Reset Filters</button>
@@ -135,16 +143,26 @@
         }).addTo(map);
 
         var desigs = [...new Set(markersData.map(m => m.desig_group))].sort();
-        var dsel = document.getElementById('desig-filter');
+        var dlist = document.getElementById('desig-list');
         desigs.forEach(function(d) {
-            var opt = document.createElement('option');
-            opt.value = d; opt.textContent = d; dsel.appendChild(opt);
+            var lbl = document.createElement('label');
+            var cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.value = d;
+            cb.addEventListener('change', applyFilters);
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(' ' + d));
+            dlist.appendChild(lbl);
         });
         var districts = [...new Set(markersData.map(m => m.district))].sort();
-        var distsel = document.getElementById('district-filter');
+        var distlist = document.getElementById('district-list');
         districts.forEach(function(d) {
-            var opt = document.createElement('option');
-            opt.value = d; opt.textContent = d; distsel.appendChild(opt);
+            var lbl = document.createElement('label');
+            var cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.value = d;
+            cb.addEventListener('change', applyFilters);
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(' ' + d));
+            distlist.appendChild(lbl);
         });
 
         markersData.forEach(function(m) {
@@ -197,8 +215,8 @@
     function applyFilters() {
         var stype = document.querySelector('input[name=stype]:checked').value;
         var ftype = document.querySelector('input[name=ftype]:checked').value;
-        var desig = document.getElementById('desig-filter').value;
-        var district = document.getElementById('district-filter').value;
+        var checkedDesigs = [...document.querySelectorAll('#desig-list input:checked')].map(cb => cb.value);
+        var checkedDistricts = [...document.querySelectorAll('#district-list input:checked')].map(cb => cb.value);
         allMarkerLayers.forEach(function(ml) {
             var m = ml.data;
             var show = true;
@@ -206,18 +224,21 @@
             if (stype === 'standard' && m.is_difficult) show = false;
             if (ftype === 'dh' && !m.is_dh) show = false;
             if (ftype === 'nondh' && m.is_dh) show = false;
-            if (desig && m.desig_group !== desig) show = false;
-            if (district && m.district !== district) show = false;
+            if (checkedDesigs.length && !checkedDesigs.includes(m.desig_group)) show = false;
+            if (checkedDistricts.length && !checkedDistricts.includes(m.district)) show = false;
             if (show) { if (!map.hasLayer(ml.layer)) ml.layer.addTo(map); }
             else { if (map.hasLayer(ml.layer)) map.removeLayer(ml.layer); }
         });
         updateCount();
     }
+    function clearCheckboxes(listId) {
+        document.querySelectorAll('#' + listId + ' input').forEach(function(cb) { cb.checked = false; });
+        applyFilters();
+    }
     function resetFilters() {
         document.querySelector('input[name=stype][value=all]').checked = true;
         document.querySelector('input[name=ftype][value=all]').checked = true;
-        document.getElementById('desig-filter').value = '';
-        document.getElementById('district-filter').value = '';
+        document.querySelectorAll('#desig-list input, #district-list input').forEach(function(cb) { cb.checked = false; });
         applyFilters();
     }
     function updateCount() {
