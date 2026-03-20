@@ -737,7 +737,7 @@ def create_files():
         const password = document.getElementById('password-input').value;
         const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
         const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
-        if (hashHex === 'PWD_HASH') {
+        if (hashHex === '%(PWD_HASH)s') {
             document.getElementById('login-overlay').style.display = 'none';
             document.getElementById('map').style.display = 'block';
             document.getElementById('filter-panel').style.display = 'block';
